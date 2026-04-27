@@ -1,0 +1,47 @@
+cd ~/Arclight
+
+# Create the run.sh file
+cat << 'EOF' > run.sh
+#!/bin/bash
+# Arclight Face Recognition System - Startup Script for Raspberry Pi
+
+echo "========================================"
+echo "     ARCLIGHT FACE RECOGNITION SYSTEM"
+echo "========================================"
+
+# Go to project directory
+cd ~/Arclight
+
+# Activate virtual environment
+if [ -d "arclight_env" ]; then
+    source arclight_env/bin/activate
+    echo "✅ Virtual environment activated"
+else
+    echo "❌ Virtual environment not found!"
+    echo "Please run setup first."
+    exit 1
+fi
+
+# Check if main file exists
+if [ ! -f "arclight_server.py" ]; then
+    echo "❌ arclight_server.py not found!"
+    exit 1
+fi
+
+echo "🚀 Starting Arclight Server..."
+echo "🌐 You can access the UI at: http://$(hostname -I | awk '{print $1}'):8000"
+echo "Press Ctrl + C to stop the server"
+echo "----------------------------------------"
+
+# Start the FastAPI server
+uvicorn arclight_server:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 1 \
+    --log-level info
+EOF
+
+# Make it executable
+chmod +x run.sh
+
+echo "✅ run.sh created successfully!"
