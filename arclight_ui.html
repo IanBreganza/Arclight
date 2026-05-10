@@ -50,7 +50,7 @@
   ════════════════════════════════════════ */
   #app {
     display: grid;
-    grid-template-columns: 220px 1fr 300px;
+    grid-template-columns: 140px 1fr 220px; 
     grid-template-rows: 48px 1fr;
     height: 100vh;
     gap: 0;
@@ -368,7 +368,7 @@
 
   #log-header h3 {
     font-size: 10px; letter-spacing: 2px;
-    color: var(--green); flex: 1;
+    color: var(--green);
   }
 
   #log-count {
@@ -400,12 +400,6 @@
   @keyframes fadeSlide {
     from { opacity: 0; transform: translateX(10px); }
     to   { opacity: 1; transform: translateX(0); }
-  }
-
-  #log-footer {
-    padding: 8px 14px;
-    display: flex; gap: 6px;
-    border-top: 1px solid var(--border);
   }
 
   /* ── Scrollbars ── */
@@ -504,6 +498,152 @@
     color: var(--muted); font-size: 11px;
   }
   .empty-state .big { font-size: 28px; opacity: .3; }
+    /* Tablet — collapse sidebar, shrink log panel */
+  /* ── 800×480 (RPi Touchscreen) ── */
+
+  @media (max-width: 800px) and (max-height: 480px),
+        (max-width: 800px) {
+
+      #app {
+           grid-template-columns: 140px 1fr 160px; 
+      }
+
+      /* ── Topbar — compact ── */
+      #topbar {
+          padding: 0 12px;
+          grid-column: 1 / -1;
+      }
+      #topbar .logo  { font-size: 12px; letter-spacing: 2px; }
+      #topbar .sub   { display: none; }
+      #cam-label     { display: none; }
+
+      /* ── Sidebar ── */
+      #sidebar {
+          width: 140px;
+          padding: 10px 8px;
+          gap: 2px;
+          overflow: hidden;
+      }
+
+      /* Remove these two — let text show again */
+      /* .sidebar-label, */
+      /* .nav-btn span:last-child, */
+
+     #enrolled-count { 
+          display: block;
+          font-size: 9px;
+          padding: 4px 8px;
+      }
+      .nav-btn {
+          justify-content: flex-start;    /* back to left-aligned */
+          padding: 8px 8px;
+          font-size: 10px;
+          letter-spacing: 0.5px;
+      }
+
+      .sidebar-label {
+          font-size: 8px;
+          letter-spacing: 1.5px;
+      }
+
+      /* ── Recognition panel ── */
+      #panel-recognize {
+          padding: 8px;
+          gap: 6px;
+          align-items: flex-start;
+          justify-content: flex-start;
+          overflow: hidden;
+      }
+
+      /* Camera fills available height */
+      #video-container {
+          width: 100%;
+          max-width: 100%;
+          /* 480 - 40px topbar - 44px controls - 16px padding = ~380px */
+          height: calc(100vh - 40px - 44px - 22px);
+          aspect-ratio: unset;
+      }
+
+      #video-feed {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+      }
+
+      /* ── Controls row — compact ── */
+      #controls {
+          max-width: 100%;
+          gap: 4px;
+          flex-wrap: nowrap;
+      }
+
+      .btn {
+          padding: 6px 10px;
+          font-size: 10px;
+          gap: 4px;
+      }
+
+      /* ── Log panel — narrow ── */
+      #log-panel {
+          width: 160px;
+      }
+
+      #log-header {
+          padding: 8px 6px;
+          justify-content: center;
+      }
+
+      #log-header h3 {
+          display: none;
+      }
+
+      #log-count {
+          font-size: 10px;
+          color: var(--green);
+          text-align: center;
+          width: 100%;
+      }
+
+      .log-entry {
+          grid-template-columns: 55px 1fr 34px;
+          padding: 5px 6px;
+          font-size: 9px;
+      }
+
+      .log-entry .le-name { font-size: 9px; }
+
+      /* ── Face manager panel ── */
+      #panel-faces {
+          padding: 10px;
+          gap: 10px;
+      }
+
+      .panel-title { font-size: 14px; }
+
+      .face-actions { gap: 4px; }
+
+      #face-grid {
+          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+          gap: 6px;
+      }
+
+      .face-card {
+          padding: 10px 8px;
+      }
+
+      .face-card .fc-name { font-size: 11px; }
+
+      /* ── Enrollment overlay ── */
+      #enroll-box {
+          width: 380px;
+          padding: 16px;
+          gap: 10px;
+      }
+
+      #enroll-video-wrap {
+          height: 240px;
+      }
+  }
 </style>
 </head>
 <body>
@@ -580,9 +720,6 @@
       <span id="log-count">0 entries</span>
     </div>
     <div id="log-list"></div>
-    <div id="log-footer">
-      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="exportLogs()">↓ EXPORT</button>
-    </div>
   </aside>
 
 </div>
@@ -748,6 +885,7 @@ async function pollRecentLogs() {
       `;
       list.insertBefore(div, list.firstChild);
       added++;
+      list.scrollTop = 0;
     }
 
     while (list.children.length > 50) {
@@ -853,19 +991,30 @@ async function openUpdateDialog() {
 
 async function deleteFace() {
   if (!selectedFace) return;
+
   const ok = await confirmDialog('Delete Face',
     `Remove "${selectedFace}" from the database? This cannot be undone.`);
+
   if (!ok) return;
 
-  const res = await fetch(`/api/faces/${encodeURIComponent(selectedFace)}`, { method: 'DELETE' });
-  if (res.ok) {
-    toast(`"${selectedFace}" deleted`);
-    selectedFace = null;
-    document.getElementById('btn-update').disabled = true;
-    document.getElementById('btn-delete').disabled = true;
-    refreshFaces();
-  } else {
-    toast('Delete failed', true);
+  try {
+    const res = await fetch(`/api/faces/${encodeURIComponent(selectedFace)}`, { 
+      method: 'DELETE' 
+    });
+
+    if (res.ok) {
+      toast(`"${selectedFace}" deleted successfully`);
+      selectedFace = null;
+      document.getElementById('btn-update').disabled = true;
+      document.getElementById('btn-delete').disabled = true;
+      refreshFaces();           // Refresh the face grid
+    } else {
+      const errorData = await res.json().catch(() => ({}));
+      toast('Delete failed: ' + (errorData.detail || 'Unknown error'), true);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Delete failed (network error)', true);
   }
 }
 
@@ -930,25 +1079,28 @@ async function pollEnrollStatus() {
 
   if (data.done) {
     clearInterval(enrollPollInterval);
-    const isSuccess = data.message.startsWith('✓');
+    enrollPollInterval = null;
+
+    const isSuccess = data.message.startsWith('✓') || data.message.includes("successfully");
+
     msgEl.className = isSuccess ? 'success' : 'error';
 
     if (isSuccess) {
-      await fetch('/api/faces/enroll/cancel', { method: 'POST' });
+      toast(data.message);
+      // Small delay then close overlay and refresh
       setTimeout(() => {
         closeEnrollOverlay();
         refreshFaces();
-        toast(data.message);
-      }, 1200);
+      }, 1500);
     } else {
+      toast(data.message, true);
+      // Allow retry
       document.getElementById('enroll-confirm-btn').disabled = false;
       document.getElementById('enroll-confirm-btn').textContent = '↺ RETRY';
       enrollCapturing = false;
-      await fetch('/api/faces/enroll/cancel', { method: 'POST' });
     }
   }
 }
-
 async function cancelEnroll() {
   if (enrollPollInterval) clearInterval(enrollPollInterval);
   await fetch('/api/faces/enroll/cancel', { method: 'POST' });

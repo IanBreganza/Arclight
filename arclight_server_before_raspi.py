@@ -11,12 +11,6 @@ from pathlib import Path
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
-import RPi.GPIO as GPIO
-
-LOCK_PIN = 17
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(LOCK_PIN, GPIO.OUT)
-GPIO.output(LOCK_PIN, GPIO.LOW)
 
 # Directory where this script lives — HTML must be here too
 BASE_DIR = Path(__file__).parent
@@ -29,19 +23,19 @@ from pydantic import BaseModel
 from insightface.app import FaceAnalysis
 import pandas as pd
 
-sys.path.insert(0,  '/home/user/Documents/Arclight-main')  # Adjust this path to where you put the YOLOv5 code
+sys.path.insert(0, r'C:\Users\Ian\Desktop\Arclight-Deploy')  # Adjust this path to where you put the YOLOv5 code
 from models.experimental import attempt_load
 from utils.general import non_max_suppression_face
 from utils.datasets import letterbox
 
-
+# DAVEEE
 # ── CONFIG ───────────────────────────────────────────────────────────────
-WEIGHTS      = '/home/user/Documents/Arclight-main/weights/yolov5n-face.pt'
-DATABASE     = '/home/user/Documents/Arclight-main/face_database.npy'
-DB_FILE      = '/home/user/Documents/Arclight-main/attendance.db'
-DATASET      = '/home/user/Documents/Arclight-main/Faces4Arclight'
-CONFIDENCE   = 0.50
-COOLDOWN_SEC = 5
+WEIGHTS      = r'C:\Users\Ian\Desktop\Arclight-Deploy\weights\yolov5n-face.pt'
+DATABASE     = r'C:\Users\Ian\Desktop\Arclight-Deploy\face_database.npy'
+DB_FILE      = r'C:\Users\Ian\Desktop\Arclight-Deploy\attendance.db'
+DATASET      = r'C:\Users\Ian\Desktop\Arclight-Deploy\Faces4Arclight' 
+CONFIDENCE   = 0.5
+COOLDOWN_SEC = 60
 ENROLL_FRAMES = 30
 # ─────────────────────────────────────────────────────────────────────────
 
@@ -61,16 +55,8 @@ enroll_state = {
     "message": ""
 }
 
-def trigger_unlock():
-     
-    GPIO.output(LOCK_PIN, GPIO.HIGH)  # LED ON / Solenoid unlock
-    time.sleep(2)                      # Stay on for 2 seconds
-    GPIO.output(LOCK_PIN, GPIO.LOW)   # LED OFF / Solenoid lock
-
 # ── WebSocket connection manager ──────────────────────────────────────────
 class ConnectionManager:
-
-    
     def __init__(self):
         self.active: list[WebSocket] = []
 
@@ -107,7 +93,6 @@ async def lifespan(app: FastAPI):
     yield
     if cap:
         cap.release()
-    GPIO.cleanup()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -164,7 +149,6 @@ def log_entry_sync(name, confidence):
     """, (name, today))
     row = c.fetchone()
 
-
     if not row:
         # First entry today
         c.execute(
@@ -174,7 +158,6 @@ def log_entry_sync(name, confidence):
         conn.commit()
         rowid = c.lastrowid
         conn.close()
-        trigger_unlock()
         return {"event": "new", "name": name, "confidence": round(float(confidence), 3),
                 "time": now.strftime('%H:%M:%S')}
 
@@ -215,35 +198,19 @@ async def generate_frames():
             continue
 
         faces = arc.get(frame)
+        for face in faces:
+            bbox  = face.bbox.astype(int)
+            x1, y1, x2, y2 = bbox[0], bbox[1], bbox[2], bbox[3]
+            name, score = recognize(face.embedding)
+            log_data = log_entry_sync(name, score)
+            if log_data:
+                asyncio.create_task(ws_manager.broadcast(log_data))
 
-        if faces:
-            known_detected = False
-            for face in faces:
-                bbox = face.bbox.astype(int)
-                x1, y1, x2, y2 = bbox[0], bbox[1], bbox[2], bbox[3]
-                name, score = recognize(face.embedding)
-                log_data = log_entry_sync(name, score)
-                if log_data:
-                    asyncio.create_task(ws_manager.broadcast(log_data))
-
-                if name != "Unknown":
-                    known_detected = True
-                    color = (0, 255, 136)
-                else:
-                    color = (0, 80, 255)
-
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(frame, f"{name}  {score:.2f}",
-                            (x1, max(y1 - 8, 12)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
-
-            if known_detected:
-                GPIO.output(LOCK_PIN, GPIO.HIGH)  # Unlock
-            else:
-                GPIO.output(LOCK_PIN, GPIO.LOW)   # Lock
-
-        else:
-            GPIO.output(LOCK_PIN, GPIO.LOW)  # No face — Lock
+            color = (0, 255, 136) if name != "Unknown" else (0, 80, 255)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, f"{name}  {score:.2f}",
+                        (x1, max(y1 - 8, 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
 
         # Also handle enrollment capture
         if enroll_state["active"] and not enroll_state["done"]:
@@ -430,7 +397,7 @@ async def export_logs():
 
     # DAVEEE
     # Define the save directory
-    SAVE_DIR = BASE_DIR / "savedlogs" 
+    SAVE_DIR = Path(r"C:\Users\Ian\Desktop\Arclight-Deploy\savedlogs") 
     SAVE_DIR.mkdir(parents=True, exist_ok=True)   # Create folder if it doesn't exist
 
     # Filename with date
